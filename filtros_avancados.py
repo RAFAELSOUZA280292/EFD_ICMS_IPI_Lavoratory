@@ -43,9 +43,13 @@ def aplicar_filtro_texto(df, coluna, operador, valor):
         return df
 
 
-def criar_painel_filtros(df):
+def criar_painel_filtros(df, key_prefix=""):
     """
     Cria painel de filtros avançados na sidebar
+    
+    Args:
+        df: DataFrame a ser filtrado
+        key_prefix: Prefixo único para as keys dos widgets (evita IDs duplicados)
     """
     st.sidebar.markdown("---")
     st.sidebar.markdown("## 🔍 Filtros Avançados")
@@ -60,7 +64,7 @@ def criar_painel_filtros(df):
             cfop_selecionado = st.multiselect(
                 "Selecione CFOPs",
                 options=cfops_disponiveis,
-                key="filtro_cfop"
+                key=f"{key_prefix}_filtro_cfop"
             )
             
             if cfop_selecionado:
@@ -74,7 +78,7 @@ def criar_painel_filtros(df):
             part_selecionado = st.multiselect(
                 "Selecione Participantes",
                 options=participantes,
-                key="filtro_participante"
+                key=f"{key_prefix}_filtro_participante"
             )
             
             if part_selecionado:
@@ -88,7 +92,7 @@ def criar_painel_filtros(df):
             cst_selecionado = st.multiselect(
                 "Selecione CST ICMS",
                 options=csts,
-                key="filtro_cst_icms"
+                key=f"{key_prefix}_filtro_cst_icms"
             )
             
             if cst_selecionado:
@@ -103,7 +107,7 @@ def criar_painel_filtros(df):
                 operador_valor = st.selectbox(
                     "Operador",
                     options=['=', '≠', '<', '>'],
-                    key="op_valor"
+                    key=f"{key_prefix}_op_valor"
                 )
             with col2:
                 valor_filtro = st.number_input(
@@ -111,10 +115,10 @@ def criar_painel_filtros(df):
                     min_value=0.0,
                     value=0.0,
                     step=100.0,
-                    key="valor_filtro"
+                    key=f"{key_prefix}_valor_filtro"
                 )
             
-            aplicar_filtro_valor = st.button("Aplicar Filtro Valor", key="btn_valor")
+            aplicar_filtro_valor = st.button("Aplicar Filtro Valor", key=f"{key_prefix}_btn_valor")
             
             if aplicar_filtro_valor and valor_filtro > 0:
                 df_filtrado = aplicar_filtro_numerico(df_filtrado, 'VL_DOC', operador_valor, valor_filtro)
@@ -137,7 +141,7 @@ def criar_painel_filtros(df):
                         value=data_min,
                         min_value=data_min,
                         max_value=data_max,
-                        key="data_inicio"
+                        key=f"{key_prefix}_data_inicio"
                     )
                 
                 with col2:
@@ -146,10 +150,10 @@ def criar_painel_filtros(df):
                         value=data_max,
                         min_value=data_min,
                         max_value=data_max,
-                        key="data_fim"
+                        key=f"{key_prefix}_data_fim"
                     )
                 
-                aplicar_filtro_data = st.button("Aplicar Filtro Data", key="btn_data")
+                aplicar_filtro_data = st.button("Aplicar Filtro Data", key=f"{key_prefix}_btn_data")
                 
                 if aplicar_filtro_data:
                     df_filtrado = df_temp[
@@ -159,7 +163,7 @@ def criar_painel_filtros(df):
                     filtros_aplicados.append(f"Data: {data_inicio} a {data_fim}")
     
     # Botão para limpar filtros
-    if st.sidebar.button("🔄 Limpar Todos os Filtros"):
+    if st.sidebar.button("🔄 Limpar Todos os Filtros", key=f"{key_prefix}_btn_limpar"):
         st.rerun()
     
     return df_filtrado, filtros_aplicados

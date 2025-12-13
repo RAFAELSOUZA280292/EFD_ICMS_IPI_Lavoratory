@@ -101,7 +101,7 @@ if uploaded_files:
         
         if not df_c100.empty:
             # Aplica filtros
-            df_filtrado, filtros = criar_painel_filtros(df_c100)
+            df_filtrado, filtros = criar_painel_filtros(df_c100, key_prefix="c100")
             exibir_resumo_filtros(filtros)
             
             # Estatísticas
@@ -155,7 +155,7 @@ if uploaded_files:
         
         if not df_c170.empty:
             # Aplica filtros
-            df_filtrado, filtros = criar_painel_filtros(df_c170)
+            df_filtrado, filtros = criar_painel_filtros(df_c170, key_prefix="c170")
             exibir_resumo_filtros(filtros)
             
             # Estatísticas
@@ -209,7 +209,7 @@ if uploaded_files:
         
         if not df_c190.empty:
             # Aplica filtros
-            df_filtrado, filtros = criar_painel_filtros(df_c190)
+            df_filtrado, filtros = criar_painel_filtros(df_c190, key_prefix="c190")
             exibir_resumo_filtros(filtros)
             
             # Estatísticas
