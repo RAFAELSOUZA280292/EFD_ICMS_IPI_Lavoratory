@@ -120,13 +120,12 @@ def criar_acumulador_cfop(df):
     campos_soma = [col for col in CAMPOS_ACUMULAVEIS if col in df.columns]
     
     # Agrupa e soma
-    df_acumulado = df.groupby(campos_grupo).agg({
-        **{campo: 'sum' for campo in campos_soma},
-        'CFOP': 'count'  # Conta registros
-    }).reset_index()
+    agg_dict = {campo: 'sum' for campo in campos_soma}
+    df_acumulado = df.groupby(campos_grupo).agg(agg_dict).reset_index()
     
-    # Renomeia coluna de contagem
-    df_acumulado.rename(columns={'CFOP': 'QTD_REGISTROS'}, inplace=True)
+    # Adiciona contagem de registros
+    df_contagem = df.groupby(campos_grupo).size().reset_index(name='QTD_REGISTROS')
+    df_acumulado = df_acumulado.merge(df_contagem, on=campos_grupo, how='left')
     
     # Adiciona coluna de classificação
     df_acumulado['TIPO'] = df_acumulado['CFOP'].apply(classificar_cfop)
