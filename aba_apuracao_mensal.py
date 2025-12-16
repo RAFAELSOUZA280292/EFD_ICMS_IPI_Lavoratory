@@ -1,33 +1,34 @@
 """
 ================================================================================
-ABA: ICMS/IPI APURADO - ANÁLISE MENSAL
+ABA: ICMS/IPI APURADO - ANÁLISE COMPLETA
 ================================================================================
 
-Módulo para exibir evolução mensal dos valores de ICMS e IPI a recolher.
+Módulo para exibir apuração completa de ICMS com base nos registros E.
 
 Baseado nos registros:
-- E110: Apuração ICMS
-- E520: Apuração IPI
-- C190: Consolidação por CFOP/CST (alternativa se E não existir)
+- E100: Período da Apuração
+- E110: Apuração do ICMS (totais)
+- E111: Ajustes da Apuração
+- E116: Obrigações ICMS Recolhido/A Recolher (guias)
 
 Data de Criação: 16/12/2025
-Autor: Sistema Lavoratory
+Atualização: 16/12/2025 - Implementação completa com registros E
 
 ================================================================================
 GATILHOS DE MANUTENÇÃO:
 ================================================================================
 
-1. ADICIONAR NOVOS CAMPOS:
-   - Editar função criar_tabela_mensal()
-   - Adicionar campo no DataFrame
+1. ADICIONAR NOVOS CAMPOS E110:
+   - Editar função exibir_totais_apuracao()
+   - Adicionar métrica
 
-2. MUDAR GRÁFICO:
-   - Editar função criar_grafico_evolucao()
-   - Ajustar cores, títulos, etc.
+2. ADICIONAR NOVOS TIPOS DE AJUSTE:
+   - Editar função exibir_ajustes()
+   - Adicionar filtro ou classificação
 
-3. ALTERAR ORDEM DOS MESES:
-   - Editar ORDEM_MESES abaixo
-   - Manter ordem alfabética (Jan, Fev, Mar...)
+3. ADICIONAR NOVOS CÓDIGOS DE OBRIGAÇÃO:
+   - Editar função exibir_guias_recolhimento()
+   - Adicionar mapeamento de código
 
 ================================================================================
 """
@@ -35,25 +36,7 @@ GATILHOS DE MANUTENÇÃO:
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime
-
-# ============================================================================
-# CONSTANTES
-# ============================================================================
-
-# Ordem alfabética dos meses (Jan, Fev, Mar...)
-ORDEM_MESES = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-]
-
-# Mapeamento de número para nome do mês
-MESES_DICT = {
-    '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março',
-    '04': 'Abril', '05': 'Maio', '06': 'Junho',
-    '07': 'Julho', '08': 'Agosto', '09': 'Setembro',
-    '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
-}
+from typing import Dict
 
 
 def formatar_moeda_br(valor):
@@ -69,205 +52,313 @@ def formatar_moeda_br(valor):
     return f'R$ {valor:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
-def extrair_mes_data(data_str):
+def formatar_data_br(data_str):
     """
-    Extrai o mês de uma data no formato DDMMAAAA.
-    
-    Parâmetros:
-        data_str (str): Data no formato '06052025' (06/Maio/2025)
-    
-    Retorna:
-        str: Nome do mês ('Janeiro', 'Fevereiro', etc.)
+    Formata data de DDMMAAAA para DD/MM/AAAA
     
     GATILHO DE MANUTENÇÃO:
-    - Se formato da data mudar, ajustar aqui
-    - Atualmente: DDMMAAAA (posições 2-3 = mês)
+    - Formato entrada: DDMMAAAA (ex: 01052025)
+    - Formato saída: DD/MM/AAAA (ex: 01/05/2025)
+    """
+    if not data_str or len(str(data_str)) < 8:
+        return ''
+    
+    data_str = str(data_str)
+    dd = data_str[0:2]
+    mm = data_str[2:4]
+    aaaa = data_str[4:8]
+    
+    return f"{dd}/{mm}/{aaaa}"
+
+
+def extrair_mes_de_data(data_str):
+    """
+    Extrai nome do mês de uma data DDMMAAAA.
+    
+    GATILHO DE MANUTENÇÃO:
+    - Formato: DDMMAAAA (ex: 01052025 = 01/Maio/2025)
+    - Posições 2-3 contêm o mês
     """
     if not data_str or len(str(data_str)) < 6:
         return 'Indefinido'
     
-    # Extrai MM de DDMMAAAA (posições 2 e 3)
+    meses_dict = {
+        '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março',
+        '04': 'Abril', '05': 'Maio', '06': 'Junho',
+        '07': 'Julho', '08': 'Agosto', '09': 'Setembro',
+        '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
+    }
+    
+    # Extrai MM de DDMMAAAA (posições 2-3)
     mes_num = str(data_str)[2:4]
-    return MESES_DICT.get(mes_num, 'Indefinido')
+    return meses_dict.get(mes_num, 'Indefinido')
 
 
-def criar_tabela_mensal_c190(df_c190: pd.DataFrame) -> pd.DataFrame:
+def mapear_codigo_obrigacao(cod_or):
     """
-    Cria tabela mensal de ICMS/IPI usando C190.
-    
-    IMPORTANTE:
-    - Usa C190 quando registros E não estão disponíveis
-    - Extrai mês de algum campo de data (se existir)
+    Mapeia código de obrigação para descrição.
     
     GATILHO DE MANUTENÇÃO:
-    - Para adicionar campos, incluir na agregação abaixo
-    - Para mudar cálculo, ajustar a lógica de soma
+    - Adicionar novos códigos conforme necessário
     """
-    if df_c190.empty:
-        return pd.DataFrame(columns=['Competência', 'ICMS Apurado', 'IPI Apurado', 'Total'])
+    mapeamento = {
+        '000': 'ICMS Normal',
+        '001': 'ICMS ST',
+        '002': 'ICMS Antecipado',
+        '003': 'ICMS Diferencial de Alíquota',
+        '004': 'ICMS Substituição Tributária',
+        '005': 'ICMS Importação',
+        '006': 'FECP (Fundo Estadual de Combate à Pobreza)',
+        '007': 'FECP ST',
+        '008': 'ICMS Complementar',
+        '009': 'ICMS Outros'
+    }
     
-    # Verifica se há campo de data para extrair mês
-    # Como C190 não tem data direta, precisamos buscar em C100
-    # Por enquanto, retorna vazio se não houver registros E
-    return pd.DataFrame(columns=['Competência', 'ICMS Apurado', 'IPI Apurado', 'Total'])
+    return mapeamento.get(cod_or, f'Código {cod_or}')
 
 
-def criar_grafico_evolucao(tabela):
+def exibir_totais_apuracao(df_e110: pd.DataFrame):
     """
-    Cria gráfico de linha mostrando evolução mensal de ICMS, IPI e Total.
-    
-    Parâmetros:
-        tabela (pd.DataFrame): Tabela mensal criada por criar_tabela_mensal()
-    
-    Retorna:
-        plotly.graph_objects.Figure: Gráfico de evolução
+    Exibe totais da apuração de ICMS (E110).
     
     GATILHO DE MANUTENÇÃO:
-    - Para mudar cores, ajustar parâmetro 'line=dict(color=...)'
-    - Para adicionar linhas, adicionar fig.add_trace()
+    - Para adicionar campos, incluir nova métrica
     """
-    fig = go.Figure()
+    if df_e110.empty:
+        st.info('Nenhum registro E110 (Apuração de ICMS) encontrado.')
+        return
     
-    # Linha ICMS (Azul)
-    fig.add_trace(go.Scatter(
-        x=tabela['Competência'],
-        y=tabela['ICMS Apurado'],
-        mode='lines+markers',
-        name='ICMS',
-        line=dict(color='#1f77b4', width=3),
-        marker=dict(size=8),
-        hovertemplate='<b>%{x}</b><br>ICMS: R$ %{y:,.2f}<extra></extra>'
-    ))
+    st.subheader('📊 Totais da Apuração de ICMS')
     
-    # Linha IPI (Laranja)
-    fig.add_trace(go.Scatter(
-        x=tabela['Competência'],
-        y=tabela['IPI Apurado'],
-        mode='lines+markers',
-        name='IPI',
-        line=dict(color='#ff7f0e', width=3),
-        marker=dict(size=8),
-        hovertemplate='<b>%{x}</b><br>IPI: R$ %{y:,.2f}<extra></extra>'
-    ))
+    # Pega primeira linha (geralmente há apenas uma por período)
+    apuracao = df_e110.iloc[0]
     
-    # Linha Total (Verde)
-    fig.add_trace(go.Scatter(
-        x=tabela['Competência'],
-        y=tabela['Total'],
-        mode='lines+markers',
-        name='Total',
-        line=dict(color='#2ca02c', width=3),
-        marker=dict(size=8),
-        hovertemplate='<b>%{x}</b><br>Total: R$ %{y:,.2f}<extra></extra>'
-    ))
+    # Linha 1: Débitos e Créditos
+    col1, col2, col3, col4 = st.columns(4)
     
-    # Layout
-    fig.update_layout(
-        title='Evolução Mensal de ICMS/IPI Apurado',
-        xaxis_title='Competência',
-        yaxis_title='Valor (R$)',
-        hovermode='x unified',
-        template='plotly_white',
-        height=500,
-        legend=dict(
-            orientation='h',
-            yanchor='bottom',
-            y=1.02,
-            xanchor='right',
-            x=1
+    with col1:
+        st.metric(
+            'Total de Débitos',
+            formatar_moeda_br(apuracao.get('VL_TOT_DEBITOS', 0)),
+            help='Valor total dos débitos de ICMS'
         )
+    
+    with col2:
+        st.metric(
+            'Ajustes a Débito',
+            formatar_moeda_br(apuracao.get('VL_AJ_DEBITOS', 0)),
+            help='Ajustes que aumentam o débito'
+        )
+    
+    with col3:
+        st.metric(
+            'Total de Créditos',
+            formatar_moeda_br(apuracao.get('VL_TOT_CREDITOS', 0)),
+            help='Valor total dos créditos de ICMS'
+        )
+    
+    with col4:
+        st.metric(
+            'Ajustes a Crédito',
+            formatar_moeda_br(apuracao.get('VL_AJ_CREDITOS', 0)),
+            help='Ajustes que aumentam o crédito'
+        )
+    
+    st.markdown('<br>', unsafe_allow_html=True)
+    
+    # Linha 2: Saldos e Valores a Recolher
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            'Saldo Credor Anterior',
+            formatar_moeda_br(apuracao.get('VL_SLD_CREDOR_ANT', 0)),
+            help='Saldo credor do período anterior'
+        )
+    
+    with col2:
+        st.metric(
+            'Saldo Apurado',
+            formatar_moeda_br(apuracao.get('VL_SLD_APURADO', 0)),
+            help='Saldo apurado no período (débitos - créditos)'
+        )
+    
+    with col3:
+        st.metric(
+            'Deduções',
+            formatar_moeda_br(apuracao.get('VL_TOT_DED', 0)),
+            help='Total de deduções'
+        )
+    
+    with col4:
+        st.metric(
+            '💰 ICMS a Recolher',
+            formatar_moeda_br(apuracao.get('VL_ICMS_RECOLHER', 0)),
+            help='Valor do ICMS a recolher',
+            delta_color='inverse'
+        )
+    
+    st.markdown('---')
+
+
+def exibir_ajustes(df_e111: pd.DataFrame):
+    """
+    Exibe ajustes da apuração (E111).
+    
+    GATILHO DE MANUTENÇÃO:
+    - Para adicionar filtros, incluir selectbox ou multiselect
+    """
+    if df_e111.empty:
+        return
+    
+    st.subheader('⚙️ Ajustes da Apuração')
+    
+    # Estatísticas dos ajustes
+    total_ajustes = df_e111['VL_AJ_APUR'].sum()
+    qtd_ajustes = len(df_e111)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric('Quantidade de Ajustes', qtd_ajustes)
+    with col2:
+        st.metric('Total dos Ajustes', formatar_moeda_br(total_ajustes))
+    
+    st.markdown('<br>', unsafe_allow_html=True)
+    
+    # Tabela de ajustes
+    df_exibicao = df_e111.copy()
+    df_exibicao['Código'] = df_exibicao['COD_AJ_APUR']
+    df_exibicao['Descrição'] = df_exibicao['DESCR_COMPL_AJ']
+    df_exibicao['Valor'] = df_exibicao['VL_AJ_APUR'].apply(formatar_moeda_br)
+    
+    st.dataframe(
+        df_exibicao[['Código', 'Descrição', 'Valor']],
+        use_container_width=True,
+        hide_index=True
     )
     
-    # Formatação do eixo Y (valores em R$)
-    fig.update_yaxes(tickformat=',.2f', tickprefix='R$ ')
-    
-    return fig
+    st.markdown('---')
 
 
-def exibir_aba_apuracao_mensal(df_c190: pd.DataFrame):
+def exibir_guias_recolhimento(df_e116: pd.DataFrame):
     """
-    Exibe a aba de ICMS/IPI Apurado com tabela e gráfico.
+    Exibe guias de recolhimento (E116).
+    
+    GATILHO DE MANUTENÇÃO:
+    - Para adicionar colunas, incluir no DataFrame de exibição
+    """
+    if df_e116.empty:
+        return
+    
+    st.subheader('📄 Guias de Recolhimento (ICMS Recolhido/A Recolher)')
+    
+    # Estatísticas das guias
+    total_guias = df_e116['VL_OR'].sum()
+    qtd_guias = len(df_e116)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric('Quantidade de Guias', qtd_guias)
+    with col2:
+        st.metric('Total a Recolher', formatar_moeda_br(total_guias))
+    
+    st.markdown('<br>', unsafe_allow_html=True)
+    
+    # Tabela de guias
+    df_exibicao = df_e116.copy()
+    df_exibicao['Tipo'] = df_exibicao['COD_OR'].apply(mapear_codigo_obrigacao)
+    df_exibicao['Valor'] = df_exibicao['VL_OR'].apply(formatar_moeda_br)
+    df_exibicao['Vencimento'] = df_exibicao['DT_VCTO'].apply(formatar_data_br)
+    df_exibicao['Cód. Receita'] = df_exibicao['COD_REC']
+    df_exibicao['Descrição'] = df_exibicao['TXT_COMPL']
+    df_exibicao['Referência'] = df_exibicao['MES_REF']
+    
+    st.dataframe(
+        df_exibicao[['Tipo', 'Valor', 'Vencimento', 'Cód. Receita', 'Descrição', 'Referência']],
+        use_container_width=True,
+        hide_index=True
+    )
+    
+    # Download CSV
+    csv = df_e116.to_csv(index=False, encoding='utf-8-sig', sep=';', decimal=',')
+    st.download_button(
+        label='📥 Baixar Guias (CSV)',
+        data=csv,
+        file_name='guias_icms_e116.csv',
+        mime='text/csv'
+    )
+    
+    st.markdown('---')
+
+
+def exibir_aba_apuracao_mensal(dados_e: Dict[str, pd.DataFrame]):
+    """
+    Exibe a aba de ICMS/IPI Apurado com dados completos.
     
     Parâmetros:
-        df_c190: DataFrame com registros C190
+        dados_e: Dicionário com DataFrames dos registros E
     
     GATILHO DE MANUTENÇÃO:
     - Esta é a função principal chamada pelo app.py
     - Para adicionar seções, adicionar st.subheader() e conteúdo
     """
-    st.header('ICMS/IPI Apurado')
-    st.markdown('**Análise Mensal dos Valores (baseado em C190)**')
+    st.header('💰 ICMS/IPI Apurado')
+    st.markdown('**Apuração Completa de ICMS (Registros E100, E110, E111, E116)**')
     
-    # Criar tabela mensal
-    tabela = criar_tabela_mensal_c190(df_c190)
+    # Extrai DataFrames
+    df_e100 = dados_e.get('E100', pd.DataFrame())
+    df_e110 = dados_e.get('E110', pd.DataFrame())
+    df_e111 = dados_e.get('E111', pd.DataFrame())
+    df_e116 = dados_e.get('E116', pd.DataFrame())
     
-    if tabela.empty:
-        st.info('📊 Análise mensal de ICMS/IPI apurado')
-        st.warning('⚠️ Registros de apuração mensal (E110/E520) não encontrados neste arquivo SPED.')
-        st.info('💡 Esta funcionalidade requer registros do Bloco E (Apuração). Os dados disponíveis são do Bloco C (Documentos Fiscais).')
-        
-        # Mostra resumo do C190 disponível
-        if not df_c190.empty:
-            st.markdown('---')
-            st.subheader('Resumo Disponível (C190)')
-            
-            total_icms = df_c190['VL_ICMS'].sum() if 'VL_ICMS' in df_c190.columns else 0
-            total_ipi = df_c190['VL_IPI'].sum() if 'VL_IPI' in df_c190.columns else 0
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric('Total ICMS (C190)', formatar_moeda_br(total_icms))
-            with col2:
-                st.metric('Total IPI (C190)', formatar_moeda_br(total_ipi))
-            with col3:
-                st.metric('Total Geral', formatar_moeda_br(total_icms + total_ipi))
-        
+    # Verifica se há dados
+    if df_e110.empty and df_e116.empty:
+        st.info('📊 Análise de ICMS/IPI Apurado')
+        st.warning('⚠️ Registros de apuração (E110, E116) não encontrados neste arquivo SPED.')
+        st.info('💡 Esta funcionalidade requer registros do Bloco E (Apuração de ICMS).')
         return
     
-    # Exibir resumo
-    total_icms = tabela['ICMS Apurado'].sum()
-    total_ipi = tabela['IPI Apurado'].sum()
-    total_geral = tabela['Total'].sum()
+    # Exibe período da apuração (E100)
+    if not df_e100.empty:
+        periodo = df_e100.iloc[0]
+        dt_ini = formatar_data_br(periodo.get('DT_INI', ''))
+        dt_fin = formatar_data_br(periodo.get('DT_FIN', ''))
+        
+        st.info(f'📅 **Período de Apuração:** {dt_ini} a {dt_fin}')
+        st.markdown('---')
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric('Total ICMS', formatar_moeda_br(total_icms))
-    with col2:
-        st.metric('Total IPI', formatar_moeda_br(total_ipi))
-    with col3:
-        st.metric('Total Geral', formatar_moeda_br(total_geral))
+    # Exibe totais da apuração (E110)
+    if not df_e110.empty:
+        exibir_totais_apuracao(df_e110)
     
-    st.markdown('---')
+    # Exibe ajustes (E111)
+    if not df_e111.empty:
+        exibir_ajustes(df_e111)
     
-    # Gráfico de Evolução
-    st.subheader('Evolução Mensal')
-    fig = criar_grafico_evolucao(tabela)
-    st.plotly_chart(fig, use_container_width=True)
+    # Exibe guias de recolhimento (E116)
+    if not df_e116.empty:
+        exibir_guias_recolhimento(df_e116)
     
-    st.markdown('---')
-    
-    # Tabela Detalhada
-    st.subheader('Detalhamento Mensal')
-    
-    # Formatar tabela para exibição
-    tabela_exibicao = tabela.copy()
-    tabela_exibicao['ICMS Apurado'] = tabela_exibicao['ICMS Apurado'].apply(formatar_moeda_br)
-    tabela_exibicao['IPI Apurado'] = tabela_exibicao['IPI Apurado'].apply(formatar_moeda_br)
-    tabela_exibicao['Total'] = tabela_exibicao['Total'].apply(formatar_moeda_br)
-    
-    st.dataframe(tabela_exibicao, use_container_width=True, hide_index=True)
-    
-    # Download CSV
-    st.markdown('---')
-    st.subheader('Download')
-    
-    csv = tabela.to_csv(index=False, encoding='utf-8-sig', sep=';', decimal=',')
-    st.download_button(
-        label='Baixar Tabela Mensal (CSV)',
-        data=csv,
-        file_name='icms_ipi_apurado_mensal.csv',
-        mime='text/csv'
-    )
+    # Resumo final
+    if not df_e110.empty:
+        st.markdown('---')
+        st.subheader('📋 Resumo da Apuração')
+        
+        apuracao = df_e110.iloc[0]
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown('**Débitos:**')
+            st.write(formatar_moeda_br(apuracao.get('VL_TOT_DEBITOS', 0)))
+        
+        with col2:
+            st.markdown('**Créditos:**')
+            st.write(formatar_moeda_br(apuracao.get('VL_TOT_CREDITOS', 0)))
+        
+        with col3:
+            st.markdown('**ICMS a Recolher:**')
+            st.write(formatar_moeda_br(apuracao.get('VL_ICMS_RECOLHER', 0)))
 
 
 # ============================================================================
@@ -275,22 +366,29 @@ def exibir_aba_apuracao_mensal(df_c190: pd.DataFrame):
 # ============================================================================
 
 """
-APRENDIZADO 1: FORMATO BRASILEIRO
-- Sempre usar formato brasileiro para valores monetários
-- Exemplo: R$ 1.234,56 (ponto para milhar, vírgula para decimal)
+APRENDIZADO 1: ESTRUTURA DA APURAÇÃO DE ICMS
 
-APRENDIZADO 2: ORDEM ALFABÉTICA DOS MESES
-- Janeiro, Fevereiro, Março, Abril, Maio, Junho
-- Julho, Agosto, Setembro, Outubro, Novembro, Dezembro
+E100: Período da apuração (data inicial e final)
+E110: Totais da apuração (débitos, créditos, saldo)
+E111: Ajustes (podem ser vários)
+E116: Guias de recolhimento (podem ser várias)
 
-APRENDIZADO 3: REGISTROS UTILIZADOS
-- E110: Apuração ICMS (ideal, mas nem sempre presente)
-- E520: Apuração IPI (ideal, mas nem sempre presente)
-- C190: Consolidação por CFOP/CST (sempre presente)
+APRENDIZADO 2: CÓDIGOS DE OBRIGAÇÃO (E116)
+
+000 = ICMS Normal
+006 = FECP (Fundo Estadual de Combate à Pobreza)
+001 = ICMS ST
+Outros conforme tabela SPED
+
+APRENDIZADO 3: AJUSTES (E111)
+
+Códigos variam por UF (ex: RJ040010, SP010203)
+Podem aumentar débito ou crédito
+Descrição complementar explica o motivo
 
 APRENDIZADO 4: FORMATO DE DATA
-- Formato: DDMMAAAA (ex: 06052025 = 06/Maio/2025)
-- Extrair posições 2-3 para obter o mês
+
+DT_INI, DT_FIN, DT_VCTO: DDMMAAAA (ex: 01052025 = 01/05/2025)
 """
 
 # ============================================================================

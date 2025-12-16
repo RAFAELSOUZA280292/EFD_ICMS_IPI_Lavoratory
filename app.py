@@ -9,6 +9,7 @@ import zipfile
 import io
 from sped_parser import processar_multiplos_speds
 from parser_registros_0 import processar_multiplos_speds_registros_0
+from parser_registros_e import processar_multiplos_speds_registros_e
 from dashboards_bigfour import exibir_dashboard_executivo
 from filtros_avancados import criar_painel_filtros, exibir_resumo_filtros
 from acumuladores_cfop import exibir_acumulador_cfop
@@ -44,6 +45,7 @@ uploaded_files = st.file_uploader(
 # Inicializa variáveis de dados
 dados_c = {}
 dados_0 = {}
+dados_e = {}
 
 # ========================================================================
 # PROCESSAMENTO (SE HOUVER UPLOAD)
@@ -60,6 +62,13 @@ if uploaded_files:
         
         # Processa registros 0 (cadastros)
         dados_0 = processar_multiplos_speds_registros_0(uploaded_files)
+        
+        # Reseta ponteiro dos arquivos para processar registros E
+        for file in uploaded_files:
+            file.seek(0)
+        
+        # Processa registros E (apuração)
+        dados_e = processar_multiplos_speds_registros_e(uploaded_files)
     
     st.success(f"✅ {len(uploaded_files)} arquivo(s) processado(s) com sucesso!")
     
@@ -110,10 +119,9 @@ if uploaded_files:
     # ========================================================================
     
     with tab3:
-        df_c190 = dados_c.get('C190', pd.DataFrame())
-        
-        if not df_c190.empty:
-            exibir_aba_apuracao_mensal(df_c190)
+        # Passa dados_e para a aba de apuração
+        if dados_e:
+            exibir_aba_apuracao_mensal(dados_e)
         else:
             st.warning("⚠️ Não há dados para exibir a apuração mensal")
     
