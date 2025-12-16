@@ -472,7 +472,7 @@ def exibir_analise_entrada_saida(df_c100: pd.DataFrame, df_c190: pd.DataFrame):
     # Tabela resumida
     st.subheader('Resumo Detalhado')
     df_exibicao = df_resumo.copy()
-    df_exibicao['VL_OPERACAO'] = df_exibicao['VL_OPERACAO'].apply(formatar_moeda_br)
+    df_exibicao['VL_NOTA'] = df_exibicao['VL_NOTA'].apply(formatar_moeda_br)
     df_exibicao['VL_ICMS'] = df_exibicao['VL_ICMS'].apply(formatar_moeda_br)
     df_exibicao['VL_IPI'] = df_exibicao['VL_IPI'].apply(formatar_moeda_br)
     df_exibicao['TOTAL'] = df_exibicao['TOTAL'].apply(formatar_moeda_br)
