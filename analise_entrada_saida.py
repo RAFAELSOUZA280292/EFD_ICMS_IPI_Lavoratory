@@ -103,7 +103,7 @@ def criar_resumo_entrada_saida(df_c100: pd.DataFrame, df_c190: pd.DataFrame) -> 
     - Para mudar cálculo, ajustar lógica de soma
     """
     if df_c190.empty:
-        return pd.DataFrame(columns=['TIPO', 'QUANTIDADE', 'VL_OPERACAO', 'VL_ICMS', 'VL_IPI', 'TOTAL'])
+        return pd.DataFrame(columns=['TIPO', 'QUANTIDADE', 'VL_NOTA', 'VL_ICMS', 'VL_IPI', 'TOTAL'])
     
     # Adiciona classificação
     df_c190 = adicionar_classificacao(df_c190)
@@ -116,14 +116,14 @@ def criar_resumo_entrada_saida(df_c100: pd.DataFrame, df_c190: pd.DataFrame) -> 
         
         if not df_tipo.empty:
             qtd = len(df_tipo)
-            vl_opr = df_tipo['VL_OPR'].sum() if 'VL_OPR' in df_tipo.columns else 0
+            vl_nota = df_tipo['VL_OPR'].sum() if 'VL_OPR' in df_tipo.columns else 0
             vl_icms = df_tipo['VL_ICMS'].sum() if 'VL_ICMS' in df_tipo.columns else 0
             vl_ipi = df_tipo['VL_IPI'].sum() if 'VL_IPI' in df_tipo.columns else 0
             
             resumo_data.append({
                 'TIPO': tipo,
                 'QUANTIDADE': qtd,
-                'VL_OPERACAO': vl_opr,
+                'VL_NOTA': vl_nota,
                 'VL_ICMS': vl_icms,
                 'VL_IPI': vl_ipi,
                 'TOTAL': vl_icms + vl_ipi
@@ -222,6 +222,7 @@ def evolucao_mensal_entrada_saida(df_c100: pd.DataFrame, df_c190: pd.DataFrame) 
     
     # Agrupa por mês e tipo
     df_evolucao = df_merged.groupby(['MES', 'TIPO_OPERACAO']).agg({
+        'VL_OPR': 'sum',
         'VL_ICMS': 'sum',
         'VL_IPI': 'sum'
     }).reset_index()
@@ -255,6 +256,7 @@ def formatar_moeda_br(valor):
 def criar_grafico_comparativo(df_resumo: pd.DataFrame) -> go.Figure:
     """
     Cria gráfico de barras comparando Entrada vs Saída.
+    Exibe: Valor Total da Nota, ICMS e IPI
     
     GATILHO DE MANUTENÇÃO:
     - Para mudar cores, ajustar marker_color
@@ -264,6 +266,16 @@ def criar_grafico_comparativo(df_resumo: pd.DataFrame) -> go.Figure:
         return None
     
     fig = go.Figure()
+    
+    # Barras de Valor Total da Nota
+    fig.add_trace(go.Bar(
+        name='Valor Total da Nota',
+        x=df_resumo['TIPO'],
+        y=df_resumo['VL_NOTA'],
+        marker_color='#2ca02c',
+        text=df_resumo['VL_NOTA'].apply(formatar_moeda_br),
+        textposition='outside'
+    ))
     
     # Barras de ICMS
     fig.add_trace(go.Bar(
@@ -286,7 +298,7 @@ def criar_grafico_comparativo(df_resumo: pd.DataFrame) -> go.Figure:
     ))
     
     fig.update_layout(
-        title='Comparativo: Entrada vs Saída',
+        title='Comparativo: Entrada vs Saída (Valor Total, ICMS e IPI)',
         xaxis_title='Tipo de Operação',
         yaxis_title='Valor (R$)',
         barmode='group',
@@ -309,6 +321,7 @@ def criar_grafico_comparativo(df_resumo: pd.DataFrame) -> go.Figure:
 def criar_grafico_evolucao_mensal(df_evolucao: pd.DataFrame) -> go.Figure:
     """
     Cria gráfico de linha mostrando evolução mensal.
+    Destaca ICMS com linhas separadas para Entrada e Saída.
     
     GATILHO DE MANUTENÇÃO:
     - Para mudar cores, ajustar line=dict(color=...)
@@ -319,34 +332,58 @@ def criar_grafico_evolucao_mensal(df_evolucao: pd.DataFrame) -> go.Figure:
     
     fig = go.Figure()
     
-    # Linha para ENTRADA
+    # ICMS - ENTRADA (destaque principal)
     df_entrada = df_evolucao[df_evolucao['TIPO_OPERACAO'] == 'ENTRADA']
     if not df_entrada.empty:
         fig.add_trace(go.Scatter(
             x=df_entrada['MES'],
-            y=df_entrada['TOTAL'],
+            y=df_entrada['VL_ICMS'],
             mode='lines+markers',
-            name='Entrada',
-            line=dict(color='#2ca02c', width=3),
-            marker=dict(size=8),
-            hovertemplate='<b>%{x}</b><br>Entrada: R$ %{y:,.2f}<extra></extra>'
+            name='ICMS Entrada',
+            line=dict(color='#1f77b4', width=4),
+            marker=dict(size=10),
+            hovertemplate='<b>%{x}</b><br>ICMS Entrada: R$ %{y:,.2f}<extra></extra>'
         ))
     
-    # Linha para SAÍDA
+    # ICMS - SAÍDA (destaque principal)
     df_saida = df_evolucao[df_evolucao['TIPO_OPERACAO'] == 'SAÍDA']
     if not df_saida.empty:
         fig.add_trace(go.Scatter(
             x=df_saida['MES'],
-            y=df_saida['TOTAL'],
+            y=df_saida['VL_ICMS'],
             mode='lines+markers',
-            name='Saída',
-            line=dict(color='#d62728', width=3),
-            marker=dict(size=8),
-            hovertemplate='<b>%{x}</b><br>Saída: R$ %{y:,.2f}<extra></extra>'
+            name='ICMS Saída',
+            line=dict(color='#d62728', width=4),
+            marker=dict(size=10),
+            hovertemplate='<b>%{x}</b><br>ICMS Saída: R$ %{y:,.2f}<extra></extra>'
+        ))
+    
+    # IPI - ENTRADA (linha secundária)
+    if not df_entrada.empty:
+        fig.add_trace(go.Scatter(
+            x=df_entrada['MES'],
+            y=df_entrada['VL_IPI'],
+            mode='lines+markers',
+            name='IPI Entrada',
+            line=dict(color='#ff7f0e', width=2, dash='dot'),
+            marker=dict(size=6),
+            hovertemplate='<b>%{x}</b><br>IPI Entrada: R$ %{y:,.2f}<extra></extra>'
+        ))
+    
+    # IPI - SAÍDA (linha secundária)
+    if not df_saida.empty:
+        fig.add_trace(go.Scatter(
+            x=df_saida['MES'],
+            y=df_saida['VL_IPI'],
+            mode='lines+markers',
+            name='IPI Saída',
+            line=dict(color='#9467bd', width=2, dash='dot'),
+            marker=dict(size=6),
+            hovertemplate='<b>%{x}</b><br>IPI Saída: R$ %{y:,.2f}<extra></extra>'
         ))
     
     fig.update_layout(
-        title='Evolução Mensal: ICMS + IPI',
+        title='Evolução Mensal: ICMS em Destaque (Entrada e Saída)',
         xaxis_title='Competência',
         yaxis_title='Valor (R$)',
         hovermode='x unified',
