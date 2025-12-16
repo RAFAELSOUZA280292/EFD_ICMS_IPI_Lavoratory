@@ -12,6 +12,8 @@ from parser_registros_0 import processar_multiplos_speds_registros_0
 from dashboards_bigfour import exibir_dashboard_executivo
 from filtros_avancados import criar_painel_filtros, exibir_resumo_filtros
 from acumuladores_cfop import exibir_acumulador_cfop
+from analise_entrada_saida import exibir_analise_entrada_saida
+from aba_apuracao_mensal import exibir_aba_apuracao_mensal
 
 # Configuração da página
 st.set_page_config(
@@ -65,8 +67,10 @@ if uploaded_files:
     # ABAS DE NAVEGAÇÃO
     # ========================================================================
     
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "📊 Dashboard",
+        "📥📤 Entrada/Saída",
+        "💰 ICMS/IPI Apurado",
         "📄 Documentos (C100)",
         "📦 Itens (C170)",
         "📈 Analítico (C190)",
@@ -89,10 +93,35 @@ if uploaded_files:
             st.warning("⚠️ Não há dados para exibir o dashboard")
     
     # ========================================================================
-    # ABA 2: DOCUMENTOS FISCAIS (C100)
+    # ABA 2: ANÁLISE ENTRADA/SAÍDA
     # ========================================================================
     
     with tab2:
+        df_c100 = dados_c.get('C100', pd.DataFrame())
+        df_c190 = dados_c.get('C190', pd.DataFrame())
+        
+        if not df_c100.empty or not df_c190.empty:
+            exibir_analise_entrada_saida(df_c100, df_c190)
+        else:
+            st.warning("⚠️ Não há dados para exibir a análise de entrada/saída")
+    
+    # ========================================================================
+    # ABA 3: ICMS/IPI APURADO (MENSAL)
+    # ========================================================================
+    
+    with tab3:
+        df_c190 = dados_c.get('C190', pd.DataFrame())
+        
+        if not df_c190.empty:
+            exibir_aba_apuracao_mensal(df_c190)
+        else:
+            st.warning("⚠️ Não há dados para exibir a apuração mensal")
+    
+    # ========================================================================
+    # ABA 4: DOCUMENTOS FISCAIS (C100)
+    # ========================================================================
+    
+    with tab4:
         st.markdown("## 📄 Documentos Fiscais - Registro C100")
         st.markdown("Notas Fiscais (NF-e, NFC-e, Modelo 01, 04, etc.)")
         st.markdown("---")
@@ -143,10 +172,10 @@ if uploaded_files:
             st.warning("⚠️ Não há registros C100 para exibir")
     
     # ========================================================================
-    # ABA 3: ITENS DOS DOCUMENTOS (C170)
+    # ABA 5: ITENS DOS DOCUMENTOS (C170)
     # ========================================================================
     
-    with tab3:
+    with tab5:
         st.markdown("## 📦 Itens dos Documentos - Registro C170")
         st.markdown("Detalhamento de produtos/serviços das notas fiscais")
         st.markdown("---")
@@ -197,10 +226,10 @@ if uploaded_files:
             st.warning("⚠️ Não há registros C170 para exibir")
     
     # ========================================================================
-    # ABA 4: REGISTRO ANALÍTICO (C190)
+    # ABA 6: REGISTRO ANALÍTICO (C190)
     # ========================================================================
     
-    with tab4:
+    with tab6:
         st.markdown("## 📈 Registro Analítico - C190")
         st.markdown("Consolidação por CST ICMS e CFOP")
         st.markdown("---")
@@ -251,10 +280,10 @@ if uploaded_files:
             st.warning("⚠️ Não há registros C190 para exibir")
     
     # ========================================================================
-    # ABA 5: PARTICIPANTES (0150)
+    # ABA 7: PARTICIPANTES (0150)
     # ========================================================================
     
-    with tab5:
+    with tab7:
         st.markdown("## 👥 Cadastro de Participantes - Registro 0150")
         st.markdown("Fornecedores, clientes e outros participantes")
         st.markdown("---")
@@ -308,10 +337,10 @@ if uploaded_files:
             st.warning("⚠️ Não há registros 0150 para exibir")
     
     # ========================================================================
-    # ABA 6: PRODUTOS (0200)
+    # ABA 8: PRODUTOS (0200)
     # ========================================================================
     
-    with tab6:
+    with tab8:
         st.markdown("## 🏷️ Cadastro de Produtos - Registro 0200")
         st.markdown("Itens comercializados (produtos e serviços)")
         st.markdown("---")
@@ -365,10 +394,10 @@ if uploaded_files:
             st.warning("⚠️ Não há registros 0200 para exibir")
     
     # ========================================================================
-    # ABA 7: ACUMULADOR POR CFOP
+    # ABA 9: ACUMULADOR POR CFOP
     # ========================================================================
     
-    with tab7:
+    with tab9:
         df_c190 = dados_c.get('C190', pd.DataFrame())
         
         if not df_c190.empty:
