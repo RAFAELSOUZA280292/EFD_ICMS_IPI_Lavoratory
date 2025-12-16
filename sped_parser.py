@@ -260,6 +260,7 @@ def processar_arquivo_sped(conteudo):
             registro = parse_registro_c190(linha)
             if registro and ultimo_c100:
                 registro['NUM_DOC_PAI'] = ultimo_c100.get('NUM_DOC', '')
+                registro['CHV_NFE'] = ultimo_c100.get('CHV_NFE', '')  # Chave de acesso da NF-e
                 registro['COD_PART_PAI'] = ultimo_c100.get('COD_PART', '')
                 registro['DT_DOC_PAI'] = ultimo_c100.get('DT_DOC', '')
                 registros_c190.append(registro)

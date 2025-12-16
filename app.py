@@ -269,9 +269,20 @@ if uploaded_files:
             
             st.markdown("<br>", unsafe_allow_html=True)
             
+            # Reorganiza colunas para exibir CHV_NFE após NUM_DOC_PAI
+            colunas_ordem = [
+                'NUM_DOC_PAI', 'CHV_NFE', 'CST_ICMS', 'CFOP', 'ALIQ_ICMS',
+                'VL_OPR', 'VL_BC_ICMS', 'VL_ICMS', 'VL_BC_ICMS_ST', 'VL_ICMS_ST',
+                'VL_RED_BC', 'VL_IPI', 'COD_PART_PAI', 'DT_DOC_PAI', 'COD_OBS'
+            ]
+            
+            # Filtra apenas colunas que existem no DataFrame
+            colunas_existentes = [col for col in colunas_ordem if col in df_filtrado.columns]
+            df_exibicao = df_filtrado[colunas_existentes]
+            
             # Tabela de dados
             st.dataframe(
-                df_filtrado,
+                df_exibicao,
                 use_container_width=True,
                 hide_index=True
             )
@@ -279,7 +290,7 @@ if uploaded_files:
             # Download
             csv = df_filtrado.to_csv(index=False, sep=';', decimal=',')
             st.download_button(
-                label="📥 Download CSV",
+                label="📅 Download CSV",
                 data=csv,
                 file_name="analitico_c190.csv",
                 mime="text/csv"
