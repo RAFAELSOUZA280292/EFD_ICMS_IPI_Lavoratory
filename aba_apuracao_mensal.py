@@ -327,7 +327,7 @@ def exibir_aba_apuracao_mensal(dados_e: Dict[str, pd.DataFrame]):
     
     st.markdown('---')
     
-    competências = df_consolidado['COMPETENCIA'].unique()
+    competencias = df_consolidado['COMPETENCIA'].unique()
     
     for competencia in competencias:
         with st.expander(f"📅 Competência {competencia}"):
