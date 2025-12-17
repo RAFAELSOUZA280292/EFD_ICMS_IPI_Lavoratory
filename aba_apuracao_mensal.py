@@ -305,25 +305,20 @@ def exibir_aba_apuracao_mensal(dados_e: Dict[str, pd.DataFrame]):
     if not df_e111.empty and 'COD_AJ_APUR' in df_e111.columns:
         codigos_unicos = sorted(df_e111['COD_AJ_APUR'].unique())
         
-        col_filtro1, col_filtro2 = st.columns([3, 1])
+        filtro_codigo = st.multiselect(
+            'Filtrar por código de ajuste:',
+            options=codigos_unicos,
+            default=[],
+            help='Selecione um ou mais códigos para filtrar. Deixe vazio para ver todos.',
+            key='filtro_e111_codigo'
+        )
         
-        with col_filtro1:
-            filtro_codigo = st.multiselect(
-                'Filtrar por código de ajuste:',
-                options=['Todos'] + codigos_unicos,
-                default=['Todos'],
-                help='Exemplo: PR020212, PR000081, etc.'
-            )
-        
-        with col_filtro2:
-            if st.button('🔄 Limpar Filtro'):
-                filtro_codigo = ['Todos']
-                st.rerun()
-        
-        # Aplica filtro
-        if 'Todos' not in filtro_codigo and filtro_codigo:
+        # Aplica filtro (se houver seleção)
+        if filtro_codigo:
             df_e111 = df_e111[df_e111['COD_AJ_APUR'].isin(filtro_codigo)]
             st.info(f'📊 Filtrando {len(df_e111)} ajuste(s) com código(s): {", ".join(filtro_codigo)}')
+        else:
+            st.info(f'📊 Exibindo todos os {len(df_e111)} ajustes. Selecione códigos acima para filtrar.')
     
     st.markdown('---')
     
