@@ -52,25 +52,73 @@ dados_e = {}
 # ========================================================================
 
 if uploaded_files:
+    # Se houver múltiplos arquivos (> 5), perguntar quais abas processar
+    abas_processar = []
+    
+    if len(uploaded_files) > 5:
+        st.warning(f'⚠️ {len(uploaded_files)} arquivos detectados!')
+        st.info('💡 Para melhor performance, selecione as abas que deseja visualizar:')
+        
+        abas_processar = st.multiselect(
+            'Selecione as abas:',
+            options=[
+                '📊 Dashboard',
+                '📥📤 Entrada/Saída',
+                '💰 ICMS/IPI Apurado',
+                '📄 Documentos (C100)',
+                '📦 Itens (C170)',
+                '📈 Analítico (C190)',
+                '👥 Participantes (0150)',
+                '🏷️ Produtos (0200)',
+                '🎯 Acumulador CFOP'
+            ],
+            default=['💰 ICMS/IPI Apurado'],
+            help='Selecione apenas as abas que você precisa para otimizar o processamento'
+        )
+        
+        if not st.button('🚀 Processar Arquivos Selecionados', type='primary'):
+            st.stop()
+    else:
+        # Se poucos arquivos, processa tudo
+        abas_processar = [
+            '📊 Dashboard', '📥📤 Entrada/Saída', '💰 ICMS/IPI Apurado',
+            '📄 Documentos (C100)', '📦 Itens (C170)', '📈 Analítico (C190)',
+            '👥 Participantes (0150)', '🏷️ Produtos (0200)', '🎯 Acumulador CFOP'
+        ]
+    
+    # Determina quais registros processar
+    processar_c = any(aba in abas_processar for aba in [
+        '📊 Dashboard', '📥📤 Entrada/Saída', '📄 Documentos (C100)',
+        '📦 Itens (C170)', '📈 Analítico (C190)', '🎯 Acumulador CFOP'
+    ])
+    
+    processar_0 = any(aba in abas_processar for aba in [
+        '👥 Participantes (0150)', '🏷️ Produtos (0200)'
+    ])
+    
+    processar_e = '💰 ICMS/IPI Apurado' in abas_processar
+    
     with st.spinner("🔄 Processando arquivos SPED..."):
-        # Processa registros C (documentos fiscais)
-        dados_c = processar_multiplos_speds(uploaded_files)
+        # Processa registros C (se necessário)
+        if processar_c:
+            dados_c = processar_multiplos_speds(uploaded_files)
+            for file in uploaded_files:
+                file.seek(0)
         
-        # Reseta ponteiro dos arquivos para processar registros 0
-        for file in uploaded_files:
-            file.seek(0)
+        # Processa registros 0 (se necessário)
+        if processar_0:
+            dados_0 = processar_multiplos_speds_registros_0(uploaded_files)
+            for file in uploaded_files:
+                file.seek(0)
         
-        # Processa registros 0 (cadastros)
-        dados_0 = processar_multiplos_speds_registros_0(uploaded_files)
-        
-        # Reseta ponteiro dos arquivos para processar registros E
-        for file in uploaded_files:
-            file.seek(0)
-        
-        # Processa registros E (apuração)
-        dados_e = processar_multiplos_speds_registros_e(uploaded_files)
+        # Processa registros E (se necessário)
+        if processar_e:
+            dados_e = processar_multiplos_speds_registros_e(uploaded_files)
     
     st.success(f"✅ {len(uploaded_files)} arquivo(s) processado(s) com sucesso!")
+    
+    # Armazena abas selecionadas no session_state
+    st.session_state['abas_selecionadas'] = abas_processar
     
     # ========================================================================
     # ABAS DE NAVEGAÇÃO
