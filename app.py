@@ -42,10 +42,17 @@ uploaded_files = st.file_uploader(
     help="Arquivos SPED ICMS/IPI em formato .txt ou .zip"
 )
 
-# Inicializa variáveis de dados
-dados_c = {}
-dados_0 = {}
-dados_e = {}
+# Inicializa session_state para controle de processamento
+if 'dados_processados' not in st.session_state:
+    st.session_state['dados_processados'] = False
+if 'dados_c' not in st.session_state:
+    st.session_state['dados_c'] = {}
+if 'dados_0' not in st.session_state:
+    st.session_state['dados_0'] = {}
+if 'dados_e' not in st.session_state:
+    st.session_state['dados_e'] = {}
+if 'abas_processar' not in st.session_state:
+    st.session_state['abas_processar'] = []
 
 # ========================================================================
 # PROCESSAMENTO (SE HOUVER UPLOAD)
@@ -53,9 +60,7 @@ dados_e = {}
 
 if uploaded_files:
     # Se houver múltiplos arquivos (> 5), perguntar quais abas processar
-    abas_processar = []
-    
-    if len(uploaded_files) > 5:
+    if len(uploaded_files) > 5 and not st.session_state['dados_processados']:
         st.warning(f'⚠️ {len(uploaded_files)} arquivos detectados!')
         st.info('💡 Para melhor performance, selecione as abas que deseja visualizar:')
         
@@ -73,52 +78,68 @@ if uploaded_files:
                 '🎯 Acumulador CFOP'
             ],
             default=['💰 ICMS/IPI Apurado'],
-            help='Selecione apenas as abas que você precisa para otimizar o processamento'
+            help='Selecione apenas as abas que você precisa para otimizar o processamento',
+            key='multiselect_abas'
         )
         
-        if not st.button('🚀 Processar Arquivos Selecionados', type='primary'):
+        # Detecta clique no botão
+        if st.button('🚀 Processar Arquivos Selecionados', type='primary', key='btn_processar'):
+            st.session_state['abas_processar'] = abas_processar
+            st.session_state['dados_processados'] = True
+            st.rerun()
+        else:
             st.stop()
-    else:
-        # Se poucos arquivos, processa tudo
-        abas_processar = [
-            '📊 Dashboard', '📥📤 Entrada/Saída', '💰 ICMS/IPI Apurado',
-            '📄 Documentos (C100)', '📦 Itens (C170)', '📈 Analítico (C190)',
-            '👥 Participantes (0150)', '🏷️ Produtos (0200)', '🎯 Acumulador CFOP'
-        ]
     
-    # Determina quais registros processar
-    processar_c = any(aba in abas_processar for aba in [
-        '📊 Dashboard', '📥📤 Entrada/Saída', '📄 Documentos (C100)',
-        '📦 Itens (C170)', '📈 Analítico (C190)', '🎯 Acumulador CFOP'
-    ])
-    
-    processar_0 = any(aba in abas_processar for aba in [
-        '👥 Participantes (0150)', '🏷️ Produtos (0200)'
-    ])
-    
-    processar_e = '💰 ICMS/IPI Apurado' in abas_processar
-    
-    with st.spinner("🔄 Processando arquivos SPED..."):
-        # Processa registros C (se necessário)
-        if processar_c:
-            dados_c = processar_multiplos_speds(uploaded_files)
-            for file in uploaded_files:
-                file.seek(0)
+    # Se já processou OU poucos arquivos, continua
+    if st.session_state['dados_processados'] or len(uploaded_files) <= 5:
+        # Define abas a processar
+        if len(uploaded_files) <= 5:
+            abas_processar = [
+                '📊 Dashboard', '📥📤 Entrada/Saída', '💰 ICMS/IPI Apurado',
+                '📄 Documentos (C100)', '📦 Itens (C170)', '📈 Analítico (C190)',
+                '👥 Participantes (0150)', '🏷️ Produtos (0200)', '🎯 Acumulador CFOP'
+            ]
+            st.session_state['abas_processar'] = abas_processar
+        else:
+            abas_processar = st.session_state['abas_processar']
         
-        # Processa registros 0 (se necessário)
-        if processar_0:
-            dados_0 = processar_multiplos_speds_registros_0(uploaded_files)
-            for file in uploaded_files:
-                file.seek(0)
+        # Determina quais registros processar
+        processar_c = any(aba in abas_processar for aba in [
+            '📊 Dashboard', '📥📤 Entrada/Saída', '📄 Documentos (C100)',
+            '📦 Itens (C170)', '📈 Analítico (C190)', '🎯 Acumulador CFOP'
+        ])
         
-        # Processa registros E (se necessário)
-        if processar_e:
-            dados_e = processar_multiplos_speds_registros_e(uploaded_files)
-    
-    st.success(f"✅ {len(uploaded_files)} arquivo(s) processado(s) com sucesso!")
-    
-    # Armazena abas selecionadas no session_state
-    st.session_state['abas_selecionadas'] = abas_processar
+        processar_0 = any(aba in abas_processar for aba in [
+            '👥 Participantes (0150)', '🏷️ Produtos (0200)'
+        ])
+        
+        processar_e = '💰 ICMS/IPI Apurado' in abas_processar
+        
+        # Processa apenas se ainda não processou
+        if not st.session_state['dados_c'] and not st.session_state['dados_0'] and not st.session_state['dados_e']:
+            with st.spinner("🔄 Processando arquivos SPED..."):
+                # Processa registros C (se necessário)
+                if processar_c:
+                    st.session_state['dados_c'] = processar_multiplos_speds(uploaded_files)
+                    for file in uploaded_files:
+                        file.seek(0)
+                
+                # Processa registros 0 (se necessário)
+                if processar_0:
+                    st.session_state['dados_0'] = processar_multiplos_speds_registros_0(uploaded_files)
+                    for file in uploaded_files:
+                        file.seek(0)
+                
+                # Processa registros E (se necessário)
+                if processar_e:
+                    st.session_state['dados_e'] = processar_multiplos_speds_registros_e(uploaded_files)
+            
+            st.success(f"✅ {len(uploaded_files)} arquivo(s) processado(s) com sucesso!")
+        
+        # Usa dados do session_state
+        dados_c = st.session_state['dados_c']
+        dados_0 = st.session_state['dados_0']
+        dados_e = st.session_state['dados_e']
     
     # ========================================================================
     # ABAS DE NAVEGAÇÃO
